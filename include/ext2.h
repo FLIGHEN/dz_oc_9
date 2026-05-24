@@ -3,6 +3,12 @@
 
 #include <stdint.h>
 
+#if defined(__GNUC__) || defined(__clang__)
+#define EXT2_PACKED __attribute__((__packed__))
+#else
+#define EXT2_PACKED
+#endif
+
 #define EXT2_SUPERBLOCK_OFFSET 1024
 #define EXT2_SUPER_MAGIC 0xEF53
 #define EXT2_N_BLOCKS 15
@@ -55,7 +61,10 @@ struct ext2_super_block {
     char     s_volume_name[16];
     char     s_last_mounted[64];
     uint32_t s_algorithm_usage_bitmap;
-};
+} EXT2_PACKED;
+
+_Static_assert(sizeof(struct ext2_super_block) == 204,
+               "unexpected ext2 superblock layout");
 
 struct ext2_group_desc {
     uint32_t bg_block_bitmap;
@@ -66,7 +75,10 @@ struct ext2_group_desc {
     uint16_t bg_used_dirs_count;
     uint16_t bg_pad;
     uint8_t  bg_reserved[12];
-};
+} EXT2_PACKED;
+
+_Static_assert(sizeof(struct ext2_group_desc) == 32,
+               "unexpected ext2 group descriptor layout");
 
 struct ext2_inode {
     uint16_t i_mode;
@@ -87,7 +99,10 @@ struct ext2_inode {
     uint32_t i_dir_acl;
     uint32_t i_faddr;
     uint8_t  i_osd2[12];
-};
+} EXT2_PACKED;
+
+_Static_assert(sizeof(struct ext2_inode) == 128,
+               "unexpected ext2 inode layout");
 
 struct ext2_dir_entry {
     uint32_t inode;
@@ -95,6 +110,9 @@ struct ext2_dir_entry {
     uint8_t  name_len;
     uint8_t  file_type;
     char     name[];
-};
+} EXT2_PACKED;
+
+_Static_assert(sizeof(struct ext2_dir_entry) == 8,
+               "unexpected ext2 directory entry header layout");
 
 #endif

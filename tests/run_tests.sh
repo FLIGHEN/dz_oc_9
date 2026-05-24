@@ -5,6 +5,9 @@ set -euo pipefail
 IMG=ext2.img
 MNT=ext2_mnt
 LOOP=""
+HELLO_PATH="$MNT/dir1/hello.txt"
+BIG_PATH="$MNT/dir2/big.bin"
+SPARSE_PATH="$MNT/dir3/sub/sparse.bin"
 
 hash_inode() {
     local source=$1
@@ -85,24 +88,26 @@ sudo chown "$(id -u):$(id -g)" "$MNT"
 
 echo "[4] create dirs"
 mkdir -p "$MNT/dir1"
-mkdir -p "$MNT/dir2/sub"
+mkdir -p "$MNT/dir2"
+mkdir -p "$MNT/dir3/sub"
 
 echo "[5] create files"
-echo "hello ext2" > "$MNT/hello.txt"
-dd if=/dev/urandom of="$MNT/big.bin" bs=2048 count=700 status=none
-truncate -s 5G "$MNT/sparse.bin"
-printf 'sparse-data\n' | dd of="$MNT/sparse.bin" bs=1 seek=0 conv=notrunc status=none
+echo "hello ext2" > "$HELLO_PATH"
+dd if=/dev/urandom of="$BIG_PATH" bs=2048 count=700 status=none
+truncate -s 5G "$SPARSE_PATH"
+printf 'sparse-data\n' | dd of="$SPARSE_PATH" bs=1 seek=0 conv=notrunc status=none
 
 sync
 
 echo "[6] save inode numbers"
 ROOT_INO=2
-HELLO_INO=$(stat -c '%i' "$MNT/hello.txt")
-BIG_INO=$(stat -c '%i' "$MNT/big.bin")
-SPARSE_INO=$(stat -c '%i' "$MNT/sparse.bin")
+HELLO_INO=$(stat -c '%i' "$HELLO_PATH")
+BIG_INO=$(stat -c '%i' "$BIG_PATH")
+SPARSE_INO=$(stat -c '%i' "$SPARSE_PATH")
 DIR1_INO=$(stat -c '%i' "$MNT/dir1")
 DIR2_INO=$(stat -c '%i' "$MNT/dir2")
-SUB_INO=$(stat -c '%i' "$MNT/dir2/sub")
+DIR3_INO=$(stat -c '%i' "$MNT/dir3")
+SUB_INO=$(stat -c '%i' "$MNT/dir3/sub")
 
 echo root="$ROOT_INO"
 echo hello="$HELLO_INO"
@@ -110,15 +115,16 @@ echo big="$BIG_INO"
 echo sparse="$SPARSE_INO"
 echo dir1="$DIR1_INO"
 echo dir2="$DIR2_INO"
+echo dir3="$DIR3_INO"
 echo sub="$SUB_INO"
 
 echo "[7] save checksums"
-sha512sum "$MNT/hello.txt" > hello.sha512
-sha512sum "$MNT/big.bin" > big.sha512
-sha512sum "$MNT/sparse.bin" > sparse.sha512
-HELLO_HASH=$(hash_file "$MNT/hello.txt")
-BIG_HASH=$(hash_file "$MNT/big.bin")
-SPARSE_HASH=$(hash_file "$MNT/sparse.bin")
+sha512sum "$HELLO_PATH" > hello.sha512
+sha512sum "$BIG_PATH" > big.sha512
+sha512sum "$SPARSE_PATH" > sparse.sha512
+HELLO_HASH=$(hash_file "$HELLO_PATH")
+BIG_HASH=$(hash_file "$BIG_PATH")
+SPARSE_HASH=$(hash_file "$SPARSE_PATH")
 
 echo "[8] umount"
 sudo umount "$MNT"
@@ -134,13 +140,14 @@ check_inode_hash "$IMG" "$BIG_INO" "$BIG_HASH" "big.bin from image"
 check_inode_hash "$IMG" "$SPARSE_INO" "$SPARSE_HASH" "sparse.bin from image"
 
 echo "[11] verify directory parse"
-require_dir_entry "$IMG" "$ROOT_INO" "$HELLO_INO" regular hello.txt
-require_dir_entry "$IMG" "$ROOT_INO" "$BIG_INO" regular big.bin
-require_dir_entry "$IMG" "$ROOT_INO" "$SPARSE_INO" regular sparse.bin
 require_dir_entry "$IMG" "$ROOT_INO" "$DIR1_INO" directory dir1
 require_dir_entry "$IMG" "$ROOT_INO" "$DIR2_INO" directory dir2
+require_dir_entry "$IMG" "$ROOT_INO" "$DIR3_INO" directory dir3
 require_dir_entry "$IMG" "$DIR1_INO" "$ROOT_INO" directory ..
-require_dir_entry "$IMG" "$DIR2_INO" "$SUB_INO" directory sub
+require_dir_entry "$IMG" "$DIR1_INO" "$HELLO_INO" regular hello.txt
+require_dir_entry "$IMG" "$DIR2_INO" "$BIG_INO" regular big.bin
+require_dir_entry "$IMG" "$DIR3_INO" "$SUB_INO" directory sub
+require_dir_entry "$IMG" "$SUB_INO" "$SPARSE_INO" regular sparse.bin
 
 echo "[12] loop device"
 LOOP=$(sudo losetup -f)
@@ -156,8 +163,13 @@ lsblk -o name,size,fstype
 check_inode_hash "$LOOP" "$HELLO_INO" "$HELLO_HASH" "hello.txt from loop"
 check_inode_hash "$LOOP" "$BIG_INO" "$BIG_HASH" "big.bin from loop"
 check_inode_hash "$LOOP" "$SPARSE_INO" "$SPARSE_HASH" "sparse.bin from loop"
-require_dir_entry "$LOOP" "$ROOT_INO" "$HELLO_INO" regular hello.txt
+require_dir_entry "$LOOP" "$ROOT_INO" "$DIR1_INO" directory dir1
 require_dir_entry "$LOOP" "$ROOT_INO" "$DIR2_INO" directory dir2
+require_dir_entry "$LOOP" "$ROOT_INO" "$DIR3_INO" directory dir3
+require_dir_entry "$LOOP" "$DIR1_INO" "$HELLO_INO" regular hello.txt
+require_dir_entry "$LOOP" "$DIR2_INO" "$BIG_INO" regular big.bin
+require_dir_entry "$LOOP" "$DIR3_INO" "$SUB_INO" directory sub
+require_dir_entry "$LOOP" "$SUB_INO" "$SPARSE_INO" regular sparse.bin
 
 sudo losetup -d "$LOOP"
 LOOP=""

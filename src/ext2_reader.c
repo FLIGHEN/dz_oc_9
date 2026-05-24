@@ -313,7 +313,7 @@ int ext2_walk_inode_blocks(
         if (logical >= max_blocks) {
             return 0;
         }
-        
+
         if (walk_data_block(&logical, physical, cb, arg) < 0) {
             return -1;
         }
